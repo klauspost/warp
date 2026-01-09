@@ -178,7 +178,7 @@ func runBench(ctx *cli.Context, b bench.Benchmark) error {
 	srv := wui.New(nil)
 	showAddress := ""
 	if ctx.Bool("web") {
-		addr, err := srv.Start()
+		addr, err := srv.Start(ctx.String("web-addr"))
 		srv.WithPoll(updates)
 		fatalIf(probe.NewError(err), "Failed to start web server")
 		showAddress = "Web UI: " + addr

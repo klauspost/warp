@@ -37,7 +37,6 @@ type Server struct {
 	data     atomic.Pointer[aggregate.Realtime]
 	poll     atomic.Pointer[chan<- aggregate.UpdateReq]
 	server   *http.Server
-	listener net.Listener
 	addr     string
 }
 
@@ -62,12 +61,14 @@ func (s *Server) WithPoll(updates chan<- aggregate.UpdateReq) {
 
 // Start starts the web server on an automatically assigned port.
 // Returns the address the server is listening on.
-func (s *Server) Start() (string, error) {
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		return "", fmt.Errorf("failed to start listener: %w", err)
+func (s *Server) Start(addr string) (string, error) {
+	if addr == "" {
+		addr = "127.0.0.1:0"
 	}
-	s.listener = listener
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		return "", fmt.Errorf("failed to start listener for %q: %w", addr, err)
+	}
 	s.addr = listener.Addr().String()
 
 	mux := http.NewServeMux()

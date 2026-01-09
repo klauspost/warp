@@ -47,6 +47,11 @@ var analyzeFlags = []cli.Flag{
 		Usage: "Open web UI to visualize results",
 	},
 	cli.StringFlag{
+		Name:   "web-addr",
+		Usage:  "Listen on specific address for web UI. Default is '127.0.0.1:0'",
+		Hidden: true,
+	},
+	cli.StringFlag{
 		Name:  "analyze.dur",
 		Value: "",
 		Usage: "Split analysis into durations of this length. Can be '1s', '5s', '1m', etc.",
@@ -158,7 +163,7 @@ func mainAnalyze(ctx *cli.Context) error {
 			monitor.UpdateAggregate(&final, "")
 			if ctx.Bool("web") {
 				srv := wui.New(&final)
-				addr, err := srv.Start()
+				addr, err := srv.Start(ctx.String("web-addr"))
 				fatalIf(probe.NewError(err), "Failed to start web server")
 				console.Println("Web UI available at:", addr)
 				if err := srv.OpenBrowser(); err != nil {

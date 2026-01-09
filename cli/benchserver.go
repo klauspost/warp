@@ -221,7 +221,7 @@ func runServerBenchmark(ctx *cli.Context, b bench.Benchmark) (bool, error) {
 		updates = make(chan aggregate.UpdateReq, 10)
 		monitor.SetUpdate(updates)
 		if ctx.Bool("web") {
-			addr, err := srv.Start()
+			addr, err := srv.Start(ctx.String("web-addr"))
 			srv.WithPoll(updates)
 			fatalIf(probe.NewError(err), "Failed to start web server")
 			showAddress = "Web UI: " + addr
