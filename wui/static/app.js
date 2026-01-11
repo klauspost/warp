@@ -71,6 +71,17 @@ const msTooltip = {
     }
 };
 
+function throughputTooltip(isBPS) {
+    return {
+        callbacks: {
+            label: ctx => {
+                const v = ctx.parsed.y.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                return `${ctx.dataset.label}: ${v} ${isBPS ? 'MiB/s' : 'ops/s'}`;
+            }
+        }
+    };
+}
+
 // Tab handling
 document.querySelectorAll('.tab').forEach(tab => {
     tab.addEventListener('click', () => {
@@ -339,7 +350,8 @@ function renderThroughputChart() {
             plugins: {
                 legend: {
                     display: datasets.length > 1
-                }
+                },
+                tooltip: throughputTooltip(hasBPS)
             }
         }
     });
@@ -620,6 +632,7 @@ function renderOperationsDetail() {
 
         const canvas = document.getElementById(`op-chart-${idx}`);
         const ctx = canvas.getContext('2d');
+        const isBPS = segments.some(s => s.bytes_per_sec > 0);
 
         new Chart(ctx, {
             type: 'line',
@@ -640,7 +653,8 @@ function renderOperationsDetail() {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                    legend: { display: false }
+                    legend: { display: false },
+                    tooltip: throughputTooltip(isBPS)
                 },
                 scales: {
                     x: {
@@ -892,42 +906,42 @@ function renderHostDetail(host, container, opType) {
     if (seg && seg.segments && seg.segments.length > 0) {
         throughputChartHtml = `
             <div class="detail-section">
-                <h4>Throughput Over Time</h4>
+                <h4>Throughput Over Time (All Operations)</h4>
                 <div class="detail-chart">
                     <canvas id="${chartId}"></canvas>
                 </div>
                 <div class="detail-stats" style="margin-top: 0.75rem;">
                     <div class="detail-stat">
                         <span class="label">Fastest</span>
-                        <span class="value">${seg.fastest_bps > 0 ? formatBytesPerSec(seg.fastest_bps) : seg.fastest_ops?.toFixed(2) + ' ops/s'}</span>
+                        <span class="value">${seg.fastest_ops?.toFixed(2)} ops/s</span>
                     </div>
                     <div class="detail-stat">
                         <span class="label">Median</span>
-                        <span class="value">${seg.median_bps > 0 ? formatBytesPerSec(seg.median_bps) : seg.median_ops?.toFixed(2) + ' ops/s'}</span>
+                        <span class="value">${seg.median_ops?.toFixed(2)} ops/s</span>
                     </div>
                     <div class="detail-stat">
                         <span class="label">Slowest</span>
-                        <span class="value">${seg.slowest_bps > 0 ? formatBytesPerSec(seg.slowest_bps) : seg.slowest_ops?.toFixed(2) + ' ops/s'}</span>
+                        <span class="value">${seg.slowest_ops?.toFixed(2)} ops/s</span>
                     </div>
                 </div>
             </div>
         `;
     }
 
-    // Get latency time series from host detail data
+    // Get latency time series from host detail data (aggregate across all ops for this host)
     const latencyTs = getOpLatencyTimeSeries(hostDetailData);
     let latencyHtml = '';
     if (latencyTs) {
         latencyHtml = `
             <div class="detail-section">
-                <h4>Request Time</h4>
+                <h4>Request Time (All Operations)</h4>
                 <div class="detail-chart">
                     <canvas id="${latencyChartId}"></canvas>
                 </div>
             </div>
             ${latencyTs.hasTTFB ? `
             <div class="detail-section">
-                <h4>Time To First Byte (TTFB)</h4>
+                <h4>Time To First Byte (All Operations)</h4>
                 <div class="detail-chart">
                     <canvas id="${ttfbChartId}"></canvas>
                 </div>
@@ -968,7 +982,7 @@ function renderHostDetail(host, container, opType) {
         </div>
     `;
 
-    // Render throughput chart
+    // Render throughput chart (always ops/s since this aggregates all operation types)
     if (seg && seg.segments && seg.segments.length > 0) {
         const canvas = document.getElementById(chartId);
         if (canvas) {
@@ -979,7 +993,7 @@ function renderHostDetail(host, container, opType) {
                         label: host,
                         data: seg.segments.map(s => ({
                             x: new Date(s.start),
-                            y: s.bytes_per_sec > 0 ? s.bytes_per_sec / (1024 * 1024) : s.obj_per_sec
+                            y: s.obj_per_sec
                         })),
                         borderColor: getOpColor(opType),
                         backgroundColor: getOpColor(opType) + '20',
@@ -990,10 +1004,10 @@ function renderHostDetail(host, container, opType) {
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
+                    plugins: { legend: { display: false }, tooltip: throughputTooltip(false) },
                     scales: {
                         x: { type: 'time', time: { displayFormats: { second: 'HH:mm:ss' } } },
-                        y: { beginAtZero: true }
+                        y: { beginAtZero: true, title: { display: true, text: 'ops/s' } }
                     }
                 }
             });
@@ -1222,28 +1236,28 @@ function renderClientDetail(client, container, opType) {
     const bps = tp.measure_duration_millis > 0 ? (tp.bytes * 1000) / tp.measure_duration_millis : 0;
     const ops = tp.measure_duration_millis > 0 ? (tp.ops * 1000) / tp.measure_duration_millis : 0;
 
-    // Get segmented stats from client detail data
+    // Get segmented stats from client detail data (aggregate across ops for this client)
     const seg = clientDetailData?.throughput?.segmented;
     let throughputChartHtml = '';
     if (seg && seg.segments && seg.segments.length > 0) {
         throughputChartHtml = `
             <div class="detail-section">
-                <h4>Throughput Over Time</h4>
+                <h4>Throughput Over Time (All Operations)</h4>
                 <div class="detail-chart">
                     <canvas id="${chartId}"></canvas>
                 </div>
                 <div class="detail-stats" style="margin-top: 0.75rem;">
                     <div class="detail-stat">
                         <span class="label">Fastest</span>
-                        <span class="value">${seg.fastest_bps > 0 ? formatBytesPerSec(seg.fastest_bps) : seg.fastest_ops?.toFixed(2) + ' ops/s'}</span>
+                        <span class="value">${seg.fastest_ops?.toFixed(2)} ops/s</span>
                     </div>
                     <div class="detail-stat">
                         <span class="label">Median</span>
-                        <span class="value">${seg.median_bps > 0 ? formatBytesPerSec(seg.median_bps) : seg.median_ops?.toFixed(2) + ' ops/s'}</span>
+                        <span class="value">${seg.median_ops?.toFixed(2)} ops/s</span>
                     </div>
                     <div class="detail-stat">
                         <span class="label">Slowest</span>
-                        <span class="value">${seg.slowest_bps > 0 ? formatBytesPerSec(seg.slowest_bps) : seg.slowest_ops?.toFixed(2) + ' ops/s'}</span>
+                        <span class="value">${seg.slowest_ops?.toFixed(2)} ops/s</span>
                     </div>
                 </div>
             </div>
@@ -1330,7 +1344,7 @@ function renderClientDetail(client, container, opType) {
         </div>
     `;
 
-    // Render throughput chart
+    // Render throughput chart (always ops/s since this aggregates all operation types)
     if (seg && seg.segments && seg.segments.length > 0) {
         const canvas = document.getElementById(chartId);
         if (canvas) {
@@ -1341,7 +1355,7 @@ function renderClientDetail(client, container, opType) {
                         label: client,
                         data: seg.segments.map(s => ({
                             x: new Date(s.start),
-                            y: s.bytes_per_sec > 0 ? s.bytes_per_sec / (1024 * 1024) : s.obj_per_sec
+                            y: s.obj_per_sec
                         })),
                         borderColor: getOpColor(opType),
                         backgroundColor: getOpColor(opType) + '20',
@@ -1352,10 +1366,10 @@ function renderClientDetail(client, container, opType) {
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
+                    plugins: { legend: { display: false }, tooltip: throughputTooltip(false) },
                     scales: {
                         x: { type: 'time', time: { displayFormats: { second: 'HH:mm:ss' } } },
-                        y: { beginAtZero: true }
+                        y: { beginAtZero: true, title: { display: true, text: 'ops/s' } }
                     }
                 }
             });
