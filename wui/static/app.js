@@ -65,6 +65,12 @@ function getOpColor(opType) {
     return opColors[opType.toUpperCase()] || colors.default;
 }
 
+const msTooltip = {
+    callbacks: {
+        label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)} ms`
+    }
+};
+
 // Tab handling
 document.querySelectorAll('.tab').forEach(tab => {
     tab.addEventListener('click', () => {
@@ -461,7 +467,8 @@ function renderLatencyChart() {
             maintainAspectRatio: false,
             interaction: { mode: 'index', intersect: false },
             plugins: {
-                legend: { display: true }
+                legend: { display: true },
+                tooltip: msTooltip
             },
             scales: {
                 x: {
@@ -683,7 +690,7 @@ function renderOperationsDetail() {
                         responsive: true,
                         maintainAspectRatio: false,
                         interaction: { mode: 'index', intersect: false },
-                        plugins: { legend: { display: true } },
+                        plugins: { legend: { display: true }, tooltip: msTooltip },
                         scales: {
                             x: { type: 'time', time: { displayFormats: { second: 'HH:mm:ss' } } },
                             y: { beginAtZero: true, title: { display: true, text: 'ms' } }
@@ -742,7 +749,7 @@ function renderOperationsDetail() {
                             responsive: true,
                             maintainAspectRatio: false,
                             interaction: { mode: 'index', intersect: false },
-                            plugins: { legend: { display: true } },
+                            plugins: { legend: { display: true }, tooltip: msTooltip },
                             scales: {
                                 x: { type: 'time', time: { displayFormats: { second: 'HH:mm:ss' } } },
                                 y: { beginAtZero: true, title: { display: true, text: 'ms' } }
@@ -1025,7 +1032,7 @@ function renderHostDetail(host, container, opType) {
                     responsive: true,
                     maintainAspectRatio: false,
                     interaction: { mode: 'index', intersect: false },
-                    plugins: { legend: { display: true } },
+                    plugins: { legend: { display: true }, tooltip: msTooltip },
                     scales: {
                         x: { type: 'time', time: { displayFormats: { second: 'HH:mm:ss' } } },
                         y: { beginAtZero: true, title: { display: true, text: 'ms' } }
@@ -1079,7 +1086,7 @@ function renderHostDetail(host, container, opType) {
                         responsive: true,
                         maintainAspectRatio: false,
                         interaction: { mode: 'index', intersect: false },
-                        plugins: { legend: { display: true } },
+                        plugins: { legend: { display: true }, tooltip: msTooltip },
                         scales: {
                             x: { type: 'time', time: { displayFormats: { second: 'HH:mm:ss' } } },
                             y: { beginAtZero: true, title: { display: true, text: 'ms' } }
@@ -1407,7 +1414,7 @@ function renderClientDetail(client, container, opType) {
                         responsive: true,
                         maintainAspectRatio: false,
                         interaction: { mode: 'index', intersect: false },
-                        plugins: { legend: { display: true } },
+                        plugins: { legend: { display: true }, tooltip: msTooltip },
                         scales: {
                             x: { type: 'time', time: { displayFormats: { second: 'HH:mm:ss' } } },
                             y: { beginAtZero: true, title: { display: true, text: 'ms' } }
@@ -1461,7 +1468,7 @@ function renderClientDetail(client, container, opType) {
                             responsive: true,
                             maintainAspectRatio: false,
                             interaction: { mode: 'index', intersect: false },
-                            plugins: { legend: { display: true } },
+                            plugins: { legend: { display: true }, tooltip: msTooltip },
                             scales: {
                                 x: { type: 'time', time: { displayFormats: { second: 'HH:mm:ss' } } },
                                 y: { beginAtZero: true, title: { display: true, text: 'ms' } }
