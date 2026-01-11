@@ -487,37 +487,50 @@ function renderLatencyChart() {
 function getOpLatencyTimeSeries(opData) {
     if (!opData?.requests_by_client) return null;
 
-    // Collect all segments with timestamps
-    const segments = [];
+    // Collect all segments grouped by timestamp
+    const byTime = new Map();
     for (const clientReqs of Object.values(opData.requests_by_client)) {
         for (const seg of clientReqs) {
             const single = seg.single_sized_requests;
             if (single && !single.skipped && seg.start_time) {
-                const point = {
-                    time: new Date(seg.start_time),
+                const key = seg.start_time;
+                if (!byTime.has(key)) {
+                    byTime.set(key, []);
+                }
+                byTime.get(key).push({
                     avg: single.dur_avg_millis,
                     p50: single.dur_median_millis,
                     p90: single.dur_90_millis,
-                    p99: single.dur_99_millis
-                };
-                // TTFB data
-                if (single.first_byte) {
-                    point.ttfbAvg = single.first_byte.average_millis || 0;
-                    point.ttfbP50 = single.first_byte.median_millis || 0;
-                    point.ttfbP90 = single.first_byte.p90_millis || 0;
-                    point.ttfbP99 = single.first_byte.p99_millis || 0;
-                }
-                segments.push(point);
+                    p99: single.dur_99_millis,
+                    ttfbAvg: single.first_byte?.average_millis,
+                    ttfbP50: single.first_byte?.median_millis,
+                    ttfbP90: single.first_byte?.p90_millis,
+                    ttfbP99: single.first_byte?.p99_millis
+                });
             }
         }
     }
 
-    if (segments.length === 0) return null;
+    if (byTime.size === 0) return null;
 
-    // Sort by time
+    // Average values for each timestamp
+    const avg = (arr, key) => {
+        const vals = arr.map(x => x[key]).filter(v => v !== undefined);
+        return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : undefined;
+    };
+    const segments = Array.from(byTime.entries()).map(([time, points]) => ({
+        time: new Date(time),
+        avg: avg(points, 'avg'),
+        p50: avg(points, 'p50'),
+        p90: avg(points, 'p90'),
+        p99: avg(points, 'p99'),
+        ttfbAvg: avg(points, 'ttfbAvg'),
+        ttfbP50: avg(points, 'ttfbP50'),
+        ttfbP90: avg(points, 'ttfbP90'),
+        ttfbP99: avg(points, 'ttfbP99')
+    }));
+
     segments.sort((a, b) => a.time - b.time);
-
-    // Check if we have TTFB data
     const hasTTFB = segments.some(s => s.ttfbAvg !== undefined);
 
     return { segments, hasTTFB };
@@ -1188,11 +1201,14 @@ function toggleClientDetail(client, idx, opType) {
 let clientChartCounter = 0;
 
 function renderClientDetail(client, container, opType) {
-    // Get client data from the specific operation type
+    // Get client data from the specific operation type for summary stats
     const opData = data.by_op_type?.[opType];
     const clientThroughput = opData?.throughput_by_client?.[client];
 
-    if (!clientThroughput) {
+    // Get detailed client data (with segments) from by_client
+    const clientDetailData = data.by_client?.[client];
+
+    if (!clientThroughput && !clientDetailData) {
         container.innerHTML = '<p>No detailed data available for this client.</p>';
         return;
     }
@@ -1201,12 +1217,13 @@ function renderClientDetail(client, container, opType) {
     const latencyChartId = `client-latency-chart-${clientChartCounter++}`;
     const ttfbChartId = `client-ttfb-chart-${clientChartCounter++}`;
 
-    const tp = clientThroughput;
+    // Use op-specific throughput for summary, fall back to client aggregate
+    const tp = clientThroughput || clientDetailData?.throughput || {};
     const bps = tp.measure_duration_millis > 0 ? (tp.bytes * 1000) / tp.measure_duration_millis : 0;
     const ops = tp.measure_duration_millis > 0 ? (tp.ops * 1000) / tp.measure_duration_millis : 0;
 
-    // Get segmented stats
-    const seg = tp.segmented;
+    // Get segmented stats from client detail data
+    const seg = clientDetailData?.throughput?.segmented;
     let throughputChartHtml = '';
     if (seg && seg.segments && seg.segments.length > 0) {
         throughputChartHtml = `
