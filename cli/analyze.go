@@ -161,18 +161,7 @@ func mainAnalyze(ctx *cli.Context) error {
 			}
 			// If -web is specified, spawn web UI
 			monitor.UpdateAggregate(&final, "")
-			if ctx.Bool("web") {
-				srv := wui.New(&final)
-				addr, err := srv.Start(ctx.String("web-addr"))
-				fatalIf(probe.NewError(err), "Failed to start web server")
-				console.Println("Web UI available at:", addr)
-				if err := srv.OpenBrowser(); err != nil {
-					console.Println("Could not open browser automatically. Please visit:", addr)
-				}
-				console.Println("Press Enter to exit...")
-				srv.WaitForKeypress()
-				srv.Shutdown()
-			}
+			final.Final = true
 			rep := final.Report(aggregate.ReportOptions{
 				Details: true,
 				Color:   !globalNoColor,
@@ -184,6 +173,18 @@ func mainAnalyze(ctx *cli.Context) error {
 				fmt.Println(string(b))
 			} else {
 				console.Println("\n", rep.String())
+			}
+			if ctx.Bool("web") {
+				srv := wui.New(&final)
+				addr, err := srv.Start(ctx.String("web-addr"))
+				fatalIf(probe.NewError(err), "Failed to start web server")
+				console.Println("Web UI available at:", addr)
+				if err := srv.OpenBrowser(); err != nil {
+					console.Println("Could not open browser automatically. Please visit:", addr)
+				}
+				console.Println("Press Enter to exit...")
+				srv.WaitForKeypress()
+				srv.Shutdown()
 			}
 		} else {
 			ops, err := bench.OperationsFromCSV(rc, true, ctx.Int("analyze.offset"), ctx.Int("analyze.limit"), log)
