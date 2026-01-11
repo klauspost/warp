@@ -920,6 +920,7 @@ function renderHostDetail(host, container) {
 
     // Get segmented stats from host detail data (aggregate across ops for this host)
     const seg = hostDetailData?.throughput?.segmented;
+    const hasBPS = seg?.fastest_bps > 0;
     let throughputChartHtml = '';
     if (seg && seg.segments && seg.segments.length > 0) {
         throughputChartHtml = `
@@ -931,15 +932,11 @@ function renderHostDetail(host, container) {
                 <div class="detail-stats" style="margin-top: 0.75rem;">
                     <div class="detail-stat">
                         <span class="label">Fastest</span>
-                        <span class="value">${seg.fastest_ops?.toFixed(2)} ops/s</span>
+                        <span class="value">${seg.fastest_ops?.toFixed(2)} ops/s${hasBPS ? '<br>' + formatBytesPerSec(seg.fastest_bps) : ''}</span>
                     </div>
                     <div class="detail-stat">
                         <span class="label">Median</span>
-                        <span class="value">${seg.median_ops?.toFixed(2)} ops/s</span>
-                    </div>
-                    <div class="detail-stat">
-                        <span class="label">Slowest</span>
-                        <span class="value">${seg.slowest_ops?.toFixed(2)} ops/s</span>
+                        <span class="value">${seg.median_ops?.toFixed(2)} ops/s${hasBPS ? '<br>' + formatBytesPerSec(seg.median_bps) : ''}</span>
                     </div>
                 </div>
             </div>
@@ -976,33 +973,54 @@ function renderHostDetail(host, container) {
         </div>
     `;
 
-    // Render throughput chart (always ops/s since this aggregates all operation types)
+    // Render throughput chart
     if (seg && seg.segments && seg.segments.length > 0) {
         const canvas = document.getElementById(chartId);
         if (canvas) {
+            const datasets = [{
+                label: 'ops/s',
+                data: seg.segments.map(s => ({ x: new Date(s.start), y: s.obj_per_sec })),
+                borderColor: colors.primary,
+                backgroundColor: colors.primary + '20',
+                fill: true,
+                tension: 0.3,
+                yAxisID: 'y'
+            }];
+            const scales = {
+                x: { type: 'time', time: { displayFormats: { second: 'HH:mm:ss' } } },
+                y: { beginAtZero: true, position: 'left', title: { display: true, text: 'ops/s' } }
+            };
+            if (hasBPS) {
+                datasets.push({
+                    label: 'MiB/s',
+                    data: seg.segments.map(s => ({ x: new Date(s.start), y: s.bytes_per_sec / (1024 * 1024) })),
+                    borderColor: colors.get,
+                    backgroundColor: colors.get + '20',
+                    fill: false,
+                    tension: 0.3,
+                    yAxisID: 'y1'
+                });
+                scales.y1 = { beginAtZero: true, position: 'right', title: { display: true, text: 'MiB/s' }, grid: { drawOnChartArea: false } };
+            }
             new Chart(canvas.getContext('2d'), {
                 type: 'line',
-                data: {
-                    datasets: [{
-                        label: host,
-                        data: seg.segments.map(s => ({
-                            x: new Date(s.start),
-                            y: s.obj_per_sec
-                        })),
-                        borderColor: colors.primary,
-                        backgroundColor: colors.primary + '20',
-                        fill: true,
-                        tension: 0.3
-                    }]
-                },
+                data: { datasets },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: { legend: { display: false }, tooltip: throughputTooltip(false) },
-                    scales: {
-                        x: { type: 'time', time: { displayFormats: { second: 'HH:mm:ss' } } },
-                        y: { beginAtZero: true, title: { display: true, text: 'ops/s' } }
-                    }
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { display: hasBPS },
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => {
+                                    const v = ctx.parsed.y.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                                    return `${ctx.dataset.label}: ${v}`;
+                                }
+                            }
+                        }
+                    },
+                    scales
                 }
             });
         }
@@ -1232,6 +1250,7 @@ function renderClientDetail(client, container, opType) {
 
     // Get segmented stats from client detail data (aggregate across ops for this client)
     const seg = clientDetailData?.throughput?.segmented;
+    const hasBPS = seg?.fastest_bps > 0;
     let throughputChartHtml = '';
     if (seg && seg.segments && seg.segments.length > 0) {
         throughputChartHtml = `
@@ -1243,15 +1262,11 @@ function renderClientDetail(client, container, opType) {
                 <div class="detail-stats" style="margin-top: 0.75rem;">
                     <div class="detail-stat">
                         <span class="label">Fastest</span>
-                        <span class="value">${seg.fastest_ops?.toFixed(2)} ops/s</span>
+                        <span class="value">${seg.fastest_ops?.toFixed(2)} ops/s${hasBPS ? '<br>' + formatBytesPerSec(seg.fastest_bps) : ''}</span>
                     </div>
                     <div class="detail-stat">
                         <span class="label">Median</span>
-                        <span class="value">${seg.median_ops?.toFixed(2)} ops/s</span>
-                    </div>
-                    <div class="detail-stat">
-                        <span class="label">Slowest</span>
-                        <span class="value">${seg.slowest_ops?.toFixed(2)} ops/s</span>
+                        <span class="value">${seg.median_ops?.toFixed(2)} ops/s${hasBPS ? '<br>' + formatBytesPerSec(seg.median_bps) : ''}</span>
                     </div>
                 </div>
             </div>
@@ -1338,33 +1353,54 @@ function renderClientDetail(client, container, opType) {
         </div>
     `;
 
-    // Render throughput chart (always ops/s since this aggregates all operation types)
+    // Render throughput chart
     if (seg && seg.segments && seg.segments.length > 0) {
         const canvas = document.getElementById(chartId);
         if (canvas) {
+            const datasets = [{
+                label: 'ops/s',
+                data: seg.segments.map(s => ({ x: new Date(s.start), y: s.obj_per_sec })),
+                borderColor: colors.primary,
+                backgroundColor: colors.primary + '20',
+                fill: true,
+                tension: 0.3,
+                yAxisID: 'y'
+            }];
+            const scales = {
+                x: { type: 'time', time: { displayFormats: { second: 'HH:mm:ss' } } },
+                y: { beginAtZero: true, position: 'left', title: { display: true, text: 'ops/s' } }
+            };
+            if (hasBPS) {
+                datasets.push({
+                    label: 'MiB/s',
+                    data: seg.segments.map(s => ({ x: new Date(s.start), y: s.bytes_per_sec / (1024 * 1024) })),
+                    borderColor: colors.get,
+                    backgroundColor: colors.get + '20',
+                    fill: false,
+                    tension: 0.3,
+                    yAxisID: 'y1'
+                });
+                scales.y1 = { beginAtZero: true, position: 'right', title: { display: true, text: 'MiB/s' }, grid: { drawOnChartArea: false } };
+            }
             new Chart(canvas.getContext('2d'), {
                 type: 'line',
-                data: {
-                    datasets: [{
-                        label: client,
-                        data: seg.segments.map(s => ({
-                            x: new Date(s.start),
-                            y: s.obj_per_sec
-                        })),
-                        borderColor: getOpColor(opType),
-                        backgroundColor: getOpColor(opType) + '20',
-                        fill: true,
-                        tension: 0.3
-                    }]
-                },
+                data: { datasets },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: { legend: { display: false }, tooltip: throughputTooltip(false) },
-                    scales: {
-                        x: { type: 'time', time: { displayFormats: { second: 'HH:mm:ss' } } },
-                        y: { beginAtZero: true, title: { display: true, text: 'ops/s' } }
-                    }
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { display: hasBPS },
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => {
+                                    const v = ctx.parsed.y.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                                    return `${ctx.dataset.label}: ${v}`;
+                                }
+                            }
+                        }
+                    },
+                    scales
                 }
             });
         }
