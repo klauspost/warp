@@ -30,16 +30,16 @@ const opColors = {
 function formatBytes(bytes) {
     if (bytes === 0) return '0 B';
     const k = 1024;
-    const sizes = ['B', 'KiB', 'MiB', 'GiB', 'TiB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    const sizes = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB'];
+    const i = Math.min(Math.floor(Math.log(bytes) / Math.log(k)), sizes.length - 1);
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
 function formatBytesPerSec(bps) {
     if (bps === 0) return '0 B/s';
     const k = 1024;
-    const sizes = ['B/s', 'KiB/s', 'MiB/s', 'GiB/s'];
-    const i = Math.floor(Math.log(bps) / Math.log(k));
+    const sizes = ['B/s', 'KiB/s', 'MiB/s', 'GiB/s', 'TiB/s', 'PiB/s'];
+    const i = Math.min(Math.floor(Math.log(bps) / Math.log(k)), sizes.length - 1);
     return parseFloat((bps / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
