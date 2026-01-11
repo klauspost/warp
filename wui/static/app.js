@@ -801,64 +801,55 @@ function renderHostsTable() {
     const opTypes = Object.keys(data.by_op_type || {}).sort();
     const hosts = [...(data.total?.hosts || [])].sort();
 
-    if (hosts.length === 0 || opTypes.length === 0) {
+    if (hosts.length === 0) {
         container.innerHTML = '<h2>Throughput by Host</h2><p style="color: var(--text-muted);">No host data available</p>';
         return;
     }
 
-    container.innerHTML = opTypes.map((opType, opIdx) => {
-        const opData = data.by_op_type[opType];
-        const byHost = opData?.throughput_by_host || {};
-
-        return `
-            <div class="op-host-section" style="margin-bottom: 2rem;">
-                <h2 style="color: ${getOpColor(opType)}; margin-bottom: 1rem;">${opType}</h2>
-                <table class="hosts-table-${opIdx}">
-                    <thead>
-                        <tr>
-                            <th>Host</th>
-                            <th>Operations</th>
-                            <th>Bytes</th>
-                            <th>Throughput</th>
-                            <th>Errors</th>
+    container.innerHTML = `
+        <h2>Throughput by Host</h2>
+        <table class="hosts-table">
+            <thead>
+                <tr>
+                    <th>Host</th>
+                    <th>Operations</th>
+                    <th>Bytes</th>
+                    <th>Throughput</th>
+                    <th>Errors</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${hosts.map((host, idx) => {
+                    const hostData = data.by_host?.[host]?.throughput || {};
+                    const bps = hostData.measure_duration_millis > 0
+                        ? (hostData.bytes * 1000) / hostData.measure_duration_millis
+                        : 0;
+                    return `
+                        <tr class="clickable-row" data-host="${host}" data-idx="${idx}">
+                            <td>${host} <span class="expand-icon">▶</span></td>
+                            <td>${formatNumber(hostData.ops || 0)}</td>
+                            <td>${formatBytes(hostData.bytes || 0)}</td>
+                            <td>${formatBytesPerSec(bps)}</td>
+                            <td>${hostData.errors || 0}</td>
                         </tr>
-                    </thead>
-                    <tbody>
-                        ${hosts.map((host, idx) => {
-                            const hostData = byHost[host] || {};
-                            const bps = hostData.measure_duration_millis > 0
-                                ? (hostData.bytes * 1000) / hostData.measure_duration_millis
-                                : 0;
-                            const globalIdx = opIdx * 1000 + idx;
-
-                            return `
-                                <tr class="clickable-row" data-host="${host}" data-op="${opType}" data-idx="${globalIdx}">
-                                    <td>${host} <span class="expand-icon">▶</span></td>
-                                    <td>${formatNumber(hostData.ops || 0)}</td>
-                                    <td>${formatBytes(hostData.bytes || 0)}</td>
-                                    <td>${formatBytesPerSec(bps)}</td>
-                                    <td>${hostData.errors || 0}</td>
-                                </tr>
-                                <tr class="detail-row" id="host-detail-${globalIdx}" style="display: none;">
-                                    <td colspan="5">
-                                        <div class="detail-content" id="host-detail-content-${globalIdx}"></div>
-                                    </td>
-                                </tr>
-                            `;
-                        }).join('')}
-                    </tbody>
-                </table>
-            </div>
-        `;
-    }).join('');
+                        <tr class="detail-row" id="host-detail-${idx}" style="display: none;">
+                            <td colspan="5">
+                                <div class="detail-content" id="host-detail-content-${idx}"></div>
+                            </td>
+                        </tr>
+                    `;
+                }).join('')}
+            </tbody>
+        </table>
+    `;
 
     // Add click handlers
     container.querySelectorAll('.clickable-row').forEach(row => {
-        row.addEventListener('click', () => toggleHostDetail(row.dataset.host, row.dataset.idx, row.dataset.op));
+        row.addEventListener('click', () => toggleHostDetail(row.dataset.host, row.dataset.idx));
     });
 }
 
-function toggleHostDetail(host, idx, opType) {
+function toggleHostDetail(host, idx) {
     const detailRow = document.getElementById(`host-detail-${idx}`);
     const contentDiv = document.getElementById(`host-detail-content-${idx}`);
     const clickableRow = detailRow.previousElementSibling;
@@ -868,7 +859,7 @@ function toggleHostDetail(host, idx, opType) {
         detailRow.style.display = 'table-row';
         icon.textContent = '▼';
         clickableRow.classList.add('expanded');
-        renderHostDetail(host, contentDiv, opType);
+        renderHostDetail(host, contentDiv);
     } else {
         detailRow.style.display = 'none';
         icon.textContent = '▶';
@@ -878,15 +869,11 @@ function toggleHostDetail(host, idx, opType) {
 
 let hostChartCounter = 0;
 
-function renderHostDetail(host, container, opType) {
-    // Get host data from the specific operation type for summary stats
-    const opData = data.by_op_type?.[opType];
-    const hostThroughput = opData?.throughput_by_host?.[host];
-
-    // Get detailed host data (with segments) from by_host
+function renderHostDetail(host, container) {
     const hostDetailData = data.by_host?.[host];
+    const opTypes = Object.keys(data.by_op_type || {}).sort();
 
-    if (!hostThroughput && !hostDetailData) {
+    if (!hostDetailData) {
         container.innerHTML = '<p>No detailed data available for this host.</p>';
         return;
     }
@@ -895,10 +882,41 @@ function renderHostDetail(host, container, opType) {
     const latencyChartId = `host-latency-chart-${hostChartCounter++}`;
     const ttfbChartId = `host-ttfb-chart-${hostChartCounter++}`;
 
-    // Use op-specific throughput for summary, fall back to host aggregate
-    const tp = hostThroughput || hostDetailData?.throughput || {};
-    const bps = tp.measure_duration_millis > 0 ? (tp.bytes * 1000) / tp.measure_duration_millis : 0;
-    const ops = tp.measure_duration_millis > 0 ? (tp.ops * 1000) / tp.measure_duration_millis : 0;
+    // Build per-operation breakdown table
+    const opBreakdownHtml = opTypes.length > 0 ? `
+        <div class="detail-section">
+            <h4>By Operation Type</h4>
+            <table class="mini-table" style="width: 100%; font-size: 0.875rem;">
+                <thead>
+                    <tr>
+                        <th>Operation</th>
+                        <th>Count</th>
+                        <th>Bytes</th>
+                        <th>Throughput</th>
+                        <th>Errors</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${opTypes.map(opType => {
+                        const opData = data.by_op_type[opType];
+                        const hostTp = opData?.throughput_by_host?.[host] || {};
+                        const bps = hostTp.measure_duration_millis > 0
+                            ? (hostTp.bytes * 1000) / hostTp.measure_duration_millis
+                            : 0;
+                        return `
+                            <tr>
+                                <td style="color: ${getOpColor(opType)}">${opType}</td>
+                                <td>${formatNumber(hostTp.ops || 0)}</td>
+                                <td>${formatBytes(hostTp.bytes || 0)}</td>
+                                <td>${formatBytesPerSec(bps)}</td>
+                                <td>${hostTp.errors || 0}</td>
+                            </tr>
+                        `;
+                    }).join('')}
+                </tbody>
+            </table>
+        </div>
+    ` : '';
 
     // Get segmented stats from host detail data (aggregate across ops for this host)
     const seg = hostDetailData?.throughput?.segmented;
@@ -952,31 +970,7 @@ function renderHostDetail(host, container, opType) {
 
     container.innerHTML = `
         <div class="detail-grid">
-            <div class="detail-section">
-                <h4>Summary (${opType})</h4>
-                <div class="detail-stats">
-                    <div class="detail-stat">
-                        <span class="label">Operations</span>
-                        <span class="value">${formatNumber(tp.ops || 0)}</span>
-                    </div>
-                    <div class="detail-stat">
-                        <span class="label">Total Bytes</span>
-                        <span class="value">${formatBytes(tp.bytes || 0)}</span>
-                    </div>
-                    <div class="detail-stat">
-                        <span class="label">Throughput</span>
-                        <span class="value">${bps > 0 ? formatBytesPerSec(bps) : ops.toFixed(2) + ' ops/s'}</span>
-                    </div>
-                    <div class="detail-stat">
-                        <span class="label">Duration</span>
-                        <span class="value">${formatDuration(tp.measure_duration_millis || 0)}</span>
-                    </div>
-                    <div class="detail-stat">
-                        <span class="label">Errors</span>
-                        <span class="value ${tp.errors > 0 ? 'error' : ''}">${tp.errors || 0}</span>
-                    </div>
-                </div>
-            </div>
+            ${opBreakdownHtml}
             ${throughputChartHtml}
             ${latencyHtml}
         </div>
@@ -995,8 +989,8 @@ function renderHostDetail(host, container, opType) {
                             x: new Date(s.start),
                             y: s.obj_per_sec
                         })),
-                        borderColor: getOpColor(opType),
-                        backgroundColor: getOpColor(opType) + '20',
+                        borderColor: colors.primary,
+                        backgroundColor: colors.primary + '20',
                         fill: true,
                         tension: 0.3
                     }]
